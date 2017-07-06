@@ -55,7 +55,7 @@
         for(i=0; i<items.count; i++){
             // Be sure items contains only UIView's object
             if([[items objectAtIndex:i] isKindOfClass:UIView.class])
-                [self addNavigationItem:[items objectAtIndex:i] tag:i];
+                [self addNavigationItem:[items objectAtIndex:i] tag:i replaced:false];
         }
         
         // is there any controllers ?
@@ -78,8 +78,7 @@
             }
             // Number of keys equals number of controllers ?
             if(controllerKeys.count == views.count)
-                _viewControllers = [[NSMutableDictionary alloc] initWithObjects:views
-                                                                        forKeys:controllerKeys];
+                _viewControllers = [[NSMutableArray alloc] initWithArray:views];//initWithObjects:views forKeys:controllerKeys];
             else{
                 // Something went wrong -> inform the client
                 NSException *exc = [[NSException alloc] initWithName:@"View Controllers error"
@@ -109,11 +108,11 @@
 -(id)initWithNavBarControllers:(NSArray *)controllers navBarBackground:(UIColor *)background showPageControl:(BOOL)addPageControl{
     NSMutableArray *views = [[NSMutableArray alloc] initWithCapacity:controllers.count];
     NSMutableArray *items = [[NSMutableArray alloc] initWithCapacity:controllers.count];
+    _controllerReferences = [[NSMutableArray alloc] initWithArray:controllers];
     for(int i =0; i<controllers.count; i++){
         // Be sure we got s subclass of UIViewController
         if([controllers[i] isKindOfClass:UIViewController.class]){
             UIViewController *ctr = controllers[i];
-            [self addChildViewController:ctr];
             [views addObject:[ctr view]];
             // Get associated item
             UILabel *item = [UILabel new];
@@ -145,12 +144,11 @@
 
 -(id)initWithNavBarItems:(NSArray *)items navBarBackground:(UIColor *)background controllers:(NSArray *)controllers showPageControl:(BOOL)addPageControl{
     NSMutableArray *views = [[NSMutableArray alloc] initWithCapacity:controllers.count];
+    _controllerReferences = [[NSMutableArray alloc] initWithArray:controllers];
     for(int i =0; i<controllers.count; i++){
         // Be sure we got s subclass of UIViewController
-        if([controllers[i] isKindOfClass:UIViewController.class]){
-            [self addChildViewController:controllers[i]];
+        if([controllers[i] isKindOfClass:UIViewController.class])
             [views addObject:[(UIViewController*)controllers[i] view]];
-        }
     }
     return [self initWithNavBarItems:items
                     navBarBackground:background
@@ -183,7 +181,6 @@
     [self notifyControllers:NSSelectorFromString(@"viewDidAppear:")
                      object:@(animated)
                  checkIndex:YES];
-    [self.navigationController.navigationBar addSubview:self.navigationBarView];
 }
 
 -(void)viewDidAppear:(BOOL)animated{
@@ -200,7 +197,6 @@
     [self notifyControllers:NSSelectorFromString(@"viewWillDisappear:")
                      object:@(animated)
                  checkIndex:YES];
-    [self.navigationBarView removeFromSuperview];
 }
 
 - (void)viewDidLoad{
@@ -273,16 +269,48 @@
         v = item;
     }
     // Adds a navigation item
-    [self addNavigationItem:v
-                        tag:tag];
+    [self addNavigationItem:v tag:tag replaced:false];
     // Save the controller
-    [self.viewControllers setObject:controller.view
-                             forKey:@(tag)];
-    // Update controller's hierarchy
-    [self addChildViewController:controller];
+    [self.viewControllers addObject:controller.view];//setObject:controller.view forKey:@(tag)];
+    // Save controller reference
+    [self.controllerReferences addObject:controller];
+    
+    
     // Do we need to refresh the UI ?
     if(refresh)
-       [self setupPagingProcess];
+        [self setupPagingProcess];
+}
+
+-(void)removeLastViewControllerWithRefresh:(BOOL) refresh{
+    int tag = (int)self.viewControllers.count-1;
+    
+    [[_navigationBarView viewWithTag:tag] removeFromSuperview];
+    [_navItemsViews removeLastObject];
+    
+    [self.viewControllers removeLastObject];
+    [self.controllerReferences removeLastObject];
+    
+    
+    if(refresh)
+        [self setupPagingProcess];
+}
+
+-(void)removeViewControllerAtIndex:(int)index withRefresh:(BOOL) refresh{
+    
+    [[_navigationBarView viewWithTag:index] removeFromSuperview];
+    [_navItemsViews removeObjectAtIndex:index];
+
+    
+    [self.viewControllers removeObjectAtIndex:index];
+    [self.controllerReferences removeObjectAtIndex:index];
+    
+    int i=0;
+    for (UIView *view in _navigationBarView.subviews) {
+        view.tag = i;
+    }
+    
+    if(refresh)
+        [self setupPagingProcess];
 }
 
 -(void)setNavigationBarColor:(UIColor*) color{
@@ -300,8 +328,9 @@
     _isUserInteraction                 = YES;
     // Default value for the navigation style
     _navigationSideItemsStyle          = SLNavigationSideItemsStyleDefault;
-    _viewControllers                   = [NSMutableDictionary new];
+    _viewControllers                   = [NSMutableArray new];
     _navItemsViews                     = [NSMutableArray new];
+    _controllerReferences              = [NSMutableArray new];
 }
 
 // Load any defined controllers from the storyboard
@@ -329,13 +358,13 @@
 
 // Perform a specific selector for each controllers
 -(void)notifyControllers:(SEL)selector object:(id)object checkIndex:(BOOL)index{
-    if(index && self.childViewControllers.count > self.indexSelected) {
-        [(UIViewController*)self.childViewControllers[self.indexSelected] performSelectorOnMainThread:selector
+    if(index && self.controllerReferences.count > self.indexSelected) {
+        [(UIViewController*)self.controllerReferences[self.indexSelected] performSelectorOnMainThread:selector
                                                                                            withObject:object
                                                                                         waitUntilDone:NO];
     }
     else{
-        [self.childViewControllers enumerateObjectsUsingBlock:^(UIViewController* ctr, NSUInteger idx, BOOL *stop) {
+        [self.controllerReferences enumerateObjectsUsingBlock:^(UIViewController* ctr, NSUInteger idx, BOOL *stop) {
             [ctr performSelectorOnMainThread:selector
                                   withObject:object
                                waitUntilDone:NO];
@@ -344,21 +373,45 @@
 }
 
 // Add a view as a navigationBarItem
--(void)addNavigationItem:(UIView*)v tag:(int)tag{
+-(void)addNavigationItem:(UIView*)v tag:(int)tag replaced:(BOOL)replace{
+    
     CGFloat distance = (SCREEN_SIZE.width/2) - self.navigationSideItemsStyle;
     CGSize vSize = ([v isKindOfClass:[UILabel class]])? [self getLabelSize:(UILabel*)v] : v.frame.size;
-    CGFloat originX = (SCREEN_SIZE.width/2 - vSize.width/2) + self.navItemsViews.count*distance;
+    CGFloat originX = (SCREEN_SIZE.width/2 - vSize.width/2) + (replace ? tag-1 : tag) * distance;
     v.frame = (CGRect){originX, 8, vSize.width, vSize.height};
     v.tag = tag;
     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self
                                                                           action:@selector(tapOnHeader:)];
     [v addGestureRecognizer:tap];
     [v setUserInteractionEnabled:YES];
-    [_navigationBarView addSubview:v];
+    
+   // if(![_navigationBarView viewWithTag:v.tag]){
+        [_navigationBarView addSubview:v];
+   // }
+    
     if(!_navItemsViews)
         _navItemsViews = [[NSMutableArray alloc] init];
     [_navItemsViews addObject:v];
 }
+
+-(void)updateNavigationItem:(UIView*)view OnTag:(int)tag {
+    [[_navigationBarView viewWithTag:tag] removeFromSuperview];
+
+    [_navItemsViews removeObjectAtIndex:tag];
+
+    [self addNavigationItem:view tag:tag replaced:true];
+    
+   // id object = [[[self.array objectAtIndex:index] retain] autorelease];
+   // [self.array removeObjectAtIndex:index];
+   // [self.array insertObject:object atIndex:newIndex];
+    
+    id object = [_navItemsViews lastObject];
+    [_navItemsViews removeLastObject];
+    [_navItemsViews insertObject:object atIndex:tag];
+
+    NSLog(@"%@", _navItemsViews);
+}
+
 
 -(void)setupPagingProcess{
     // Make our ScrollView
@@ -386,29 +439,62 @@
         if(self.tintPageControlColor) self.pageControl.pageIndicatorTintColor = self.tintPageControlColor;
         [self.navigationBarView addSubview:self.pageControl];
     }
+    
+   NSMutableArray *arr = [[NSMutableArray alloc] init];
+
+    [self.navigationBarView.subviews enumerateObjectsUsingBlock:^(__kindof UIView * _Nonnull navBarView, NSUInteger navBarViewIdx, BOOL * _Nonnull stopNavBarView) {
+        
+        
+        
+        NSUInteger index = [self.navItemsViews indexOfObjectPassingTest:^BOOL(id  _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+            UIView *viewFromArr = (UIView*)obj;
+            return viewFromArr.tag == navBarView.tag;
+        }];
+   
+        NSLog(@"%@", arr);
+
+        
+        if(index == NSNotFound){
+            NSLog(@"found empty view");
+            [navBarView removeFromSuperview];
+        }else{
+            NSLog(@"found empty view - %d", index);
+            
+           // if([arr containsObject:[NSNumber numberWithInt:index]]){
+           //     [navBarView removeFromSuperview];
+           //     NSLog(@"contains");
+           // }else{
+           //     [arr addObject:[NSNumber numberWithInt:index]];
+           // }
+            
+
+        }
+        
+    }];
+
+    [self.navigationController.navigationBar addSubview:self.navigationBarView];
 }
 
 // Add all views
 -(void)addControllers{
-    if(self.viewControllers
-       && self.viewControllers.count > 0){
+    if(self.viewControllers  && self.viewControllers.count > 0){
         float width                 = SCREEN_SIZE.width * self.viewControllers.count;
         float height                = CGRectGetHeight(self.view.bounds) - CGRectGetHeight(self.navigationBarView.bounds);
         self.scrollView.contentSize = (CGSize){width, height};
         __block int i = 0;
         // Sort all keys in ascending
-        NSArray *sortedIndexes = [self.viewControllers.allKeys sortedArrayUsingComparator:^NSComparisonResult(NSNumber *key1, NSNumber *key2) {
-            if ([key1 integerValue] > [key2 integerValue]) {
-                return (NSComparisonResult)NSOrderedDescending;
-            }
-            if ([key1 integerValue] < [key2 integerValue]) {
-                return (NSComparisonResult)NSOrderedAscending;
-            }
-            return (NSComparisonResult)NSOrderedSame;
-        }];
-
-        [sortedIndexes enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
-            UIView *v = self.viewControllers[@(idx)];
+      //  NSArray *sortedIndexes = [self.viewControllers.allKeys sortedArrayUsingComparator:^NSComparisonResult(NSNumber *key1, NSNumber *key2) {
+      //      if ([key1 integerValue] > [key2 integerValue]) {
+       //         return (NSComparisonResult)NSOrderedDescending;
+       //     }
+       //     if ([key1 integerValue] < [key2 integerValue]) {
+        //        return (NSComparisonResult)NSOrderedAscending;
+        //    }
+        //    return (NSComparisonResult)NSOrderedSame;
+        //}];
+        
+        [self.viewControllers enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
+            UIView *v = (UIView*)obj;
             [self.scrollView addSubview:v];
             if([self useAutoLayout:v]){
                 // Using AutoLayout
@@ -429,25 +515,28 @@
                                                                             attribute:NSLayoutAttributeHeight
                                                                            multiplier:1.0
                                                                              constant:0]];
-                UIView *previous = [self.viewControllers objectForKey:[NSNumber numberWithFloat:(idx - 1)]];
-                if(previous)
+                
+                if(idx>0){
+                    UIView *previous = [self.viewControllers objectAtIndex:(idx - 1)];//objectForKey:[NSNumber numberWithFloat:(idx - 1)]];
                     // Distance constraint: set distance between previous view and the current one
                     [self.scrollView addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:[previous]-0-[v]"
                                                                                             options:0
                                                                                             metrics:nil
                                                                                               views:@{@"v" : v, @"previous" : previous}]];
-                else
+                    
+                }else{
                     // First view
                     [self.scrollView addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|-0-[v]"
                                                                                             options:0
                                                                                             metrics:nil
                                                                                               views:@{@"v" : v }]];
+                }
                 // Oridnate constraint : set the space between the Top and the current view
-                [self.scrollView addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:[NSString stringWithFormat:@"V:|-%f-[v]", CGRectGetHeight(self.navigationBarView.frame)]
+                [self.scrollView addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|-0-[v]"
                                                                                         options:0
                                                                                         metrics:nil
                                                                                           views:@{@"v" : v}]];
-                }
+            }
             else{
                 v.frame = (CGRect){SCREEN_SIZE.width * i, 0, SCREEN_SIZE.width, CGRectGetHeight(self.view.frame)};
                 i++;
@@ -460,7 +549,7 @@
 -(void)tapOnHeader:(UITapGestureRecognizer *)recognizer{
     if(self.isUserInteraction){
         // Get the wanted view
-        UIView *view = [self.viewControllers objectForKey:@(recognizer.view.tag)];
+        UIView *view = [self.viewControllers objectAtIndex:recognizer.view.tag];//objectForKey:@(recognizer.view.tag)];
         [self.scrollView scrollRectToVisible:view.frame
                                     animated:YES];
     }

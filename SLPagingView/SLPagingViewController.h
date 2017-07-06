@@ -58,7 +58,13 @@ typedef void(^SLPagingViewDidChanged)(NSInteger currentPage);
 /*
  *  Contains all views displayed
  */
-@property (nonatomic, strong) NSMutableDictionary *viewControllers;
+@property (nonatomic, strong) NSMutableArray *viewControllers;
+
+/*
+ *  Contains all views displayed
+ */
+@property (nonatomic, strong) NSMutableArray *controllerReferences;
+
 /*
  *  Tint color of the page control
  */
@@ -214,11 +220,12 @@ typedef void(^SLPagingViewDidChanged)(NSInteger currentPage);
  */
 -(void)addViewControllers:(UIViewController *) controller needToRefresh:(BOOL) refresh;
 
-/**
- *  Allows to update the navigationBar's background color
- *
- *  @param color
- */
+-(void)updateNavigationItem:(UIView*)view OnTag:(int)tag;
+
+-(void)removeLastViewControllerWithRefresh:(BOOL) refresh;
+
+-(void)removeViewControllerAtIndex:(int)index withRefresh:(BOOL) refresh;
+
 -(void)setNavigationBarColor:(UIColor*) color;
 
 @end
