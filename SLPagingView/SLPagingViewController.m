@@ -12,7 +12,6 @@
 
 @property (nonatomic, strong) UIScrollView *scrollView;
 @property (nonatomic, strong) UIPageControl *pageControl;
-@property (nonatomic, strong) NSMutableArray *navItemsViews;
 @property (nonatomic) BOOL needToShowPageControl;
 @property (nonatomic) BOOL isUserInteraction;
 @property (nonatomic) NSInteger indexSelected;
@@ -248,7 +247,37 @@
     self.indexSelected = index;
     // Get the right position and update it
     CGFloat xOffset    = (index * ((int)SCREEN_SIZE.width));
-    [self.scrollView setContentOffset:CGPointMake(xOffset, self.scrollView.contentOffset.y) animated:animated];
+    
+  [self.scrollView setContentOffset:CGPointMake(xOffset, self.scrollView.contentOffset.y) animated:animated];
+    
+    
+    
+    [NSTimer scheduledTimerWithTimeInterval:0.01 repeats:false block:^(NSTimer * _Nonnull timer) {
+        int i=0;
+        for (UIView *view in _navigationBarView.subviews) {
+            CGFloat distance = (SCREEN_SIZE.width/2) - self.navigationSideItemsStyle;
+            CGSize vSize     = ([view isKindOfClass:[UILabel class]])? [self getLabelSize:(UILabel*)view] : view.frame.size;
+            CGFloat originX  = ((SCREEN_SIZE.width/2 - vSize.width/2) + i*distance) - xOffset/(SCREEN_SIZE.width/distance);
+            view.frame          = (CGRect){originX, 8, vSize.width, vSize.height};
+            i++;
+        }
+        
+        i=0;
+        for (UIView *view in _navItemsViews) {
+            //view.tag = i;
+            CGFloat distance = (SCREEN_SIZE.width/2) - self.navigationSideItemsStyle;
+            CGSize vSize     = ([view isKindOfClass:[UILabel class]])? [self getLabelSize:(UILabel*)view] : view.frame.size;
+            CGFloat originX  = ((SCREEN_SIZE.width/2 - vSize.width/2) + i*distance) - xOffset/(SCREEN_SIZE.width/distance);
+            view.frame          = (CGRect){originX, 8, vSize.width, vSize.height};
+            i++;
+            
+        }
+        
+        [self scrollViewDidScroll:self.scrollView];
+        
+    }];
+    
+    
 }
 
 -(void)addViewControllers:(UIViewController *) controller needToRefresh:(BOOL) refresh{
@@ -268,6 +297,7 @@
         [item setText:NSStringFromClass(controller.class)];
         v = item;
     }
+    
     // Adds a navigation item
     [self addNavigationItem:v tag:tag replaced:false];
     // Save the controller
@@ -279,6 +309,8 @@
     // Do we need to refresh the UI ?
     if(refresh)
         [self setupPagingProcess];
+    
+    
 }
 
 -(void)removeLastViewControllerWithRefresh:(BOOL) refresh{
@@ -293,6 +325,9 @@
     
     if(refresh)
         [self setupPagingProcess];
+    
+    
+    
 }
 
 -(void)removeViewControllerAtIndex:(int)index withRefresh:(BOOL) refresh{
@@ -304,13 +339,47 @@
     [self.viewControllers removeObjectAtIndex:index];
     [self.controllerReferences removeObjectAtIndex:index];
     
+    
+    
     int i=0;
     for (UIView *view in _navigationBarView.subviews) {
         view.tag = i;
+        i++;
+    }
+    i=0;
+    for (UIView *view in _navItemsViews) {
+        view.tag = i;
+        i++;
+    }
+    
+    i=0;
+    for (UIView *view in _navigationBarView.subviews) {
+        CGFloat distance = (SCREEN_SIZE.width/2) - self.navigationSideItemsStyle;
+        CGSize vSize     = ([view isKindOfClass:[UILabel class]])? [self getLabelSize:(UILabel*)view] : view.frame.size;
+        CGFloat originX  = ((SCREEN_SIZE.width/2 - vSize.width/2) + i*distance) - self.scrollView.contentOffset.x/(SCREEN_SIZE.width/distance);
+        view.frame          = (CGRect){originX, 8, vSize.width, vSize.height};
+        i++;
+    }
+    
+    i=0;
+    for (UIView *view in _navItemsViews) {
+        //view.tag = i;
+        CGFloat distance = (SCREEN_SIZE.width/2) - self.navigationSideItemsStyle;
+        CGSize vSize     = ([view isKindOfClass:[UILabel class]])? [self getLabelSize:(UILabel*)view] : view.frame.size;
+        CGFloat originX  = ((SCREEN_SIZE.width/2 - vSize.width/2) + i*distance) - self.scrollView.contentOffset.x/(SCREEN_SIZE.width/distance);
+        view.frame          = (CGRect){originX, 8, vSize.width, vSize.height};
+        i++;
+        
     }
     
     if(refresh)
         [self setupPagingProcess];
+    
+    
+    
+    
+
+    
 }
 
 -(void)setNavigationBarColor:(UIColor*) color{
@@ -401,9 +470,6 @@
 
     [self addNavigationItem:view tag:tag replaced:true];
     
-   // id object = [[[self.array objectAtIndex:index] retain] autorelease];
-   // [self.array removeObjectAtIndex:index];
-   // [self.array insertObject:object atIndex:newIndex];
     
     id object = [_navItemsViews lastObject];
     [_navItemsViews removeLastObject];
@@ -440,38 +506,7 @@
         [self.navigationBarView addSubview:self.pageControl];
     }
     
-   NSMutableArray *arr = [[NSMutableArray alloc] init];
-
-    [self.navigationBarView.subviews enumerateObjectsUsingBlock:^(__kindof UIView * _Nonnull navBarView, NSUInteger navBarViewIdx, BOOL * _Nonnull stopNavBarView) {
-        
-        
-        
-        NSUInteger index = [self.navItemsViews indexOfObjectPassingTest:^BOOL(id  _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
-            UIView *viewFromArr = (UIView*)obj;
-            return viewFromArr.tag == navBarView.tag;
-        }];
-   
-        NSLog(@"%@", arr);
-
-        
-        if(index == NSNotFound){
-            NSLog(@"found empty view");
-            [navBarView removeFromSuperview];
-        }else{
-            NSLog(@"found empty view - %d", index);
-            
-           // if([arr containsObject:[NSNumber numberWithInt:index]]){
-           //     [navBarView removeFromSuperview];
-           //     NSLog(@"contains");
-           // }else{
-           //     [arr addObject:[NSNumber numberWithInt:index]];
-           // }
-            
-
-        }
-        
-    }];
-
+    
     [self.navigationController.navigationBar addSubview:self.navigationBarView];
 }
 
@@ -482,16 +517,7 @@
         float height                = CGRectGetHeight(self.view.bounds) - CGRectGetHeight(self.navigationBarView.bounds);
         self.scrollView.contentSize = (CGSize){width, height};
         __block int i = 0;
-        // Sort all keys in ascending
-      //  NSArray *sortedIndexes = [self.viewControllers.allKeys sortedArrayUsingComparator:^NSComparisonResult(NSNumber *key1, NSNumber *key2) {
-      //      if ([key1 integerValue] > [key2 integerValue]) {
-       //         return (NSComparisonResult)NSOrderedDescending;
-       //     }
-       //     if ([key1 integerValue] < [key2 integerValue]) {
-        //        return (NSComparisonResult)NSOrderedAscending;
-        //    }
-        //    return (NSComparisonResult)NSOrderedSame;
-        //}];
+   
         
         [self.viewControllers enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
             UIView *v = (UIView*)obj;

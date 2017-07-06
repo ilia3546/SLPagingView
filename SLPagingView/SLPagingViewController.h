@@ -59,6 +59,7 @@ typedef void(^SLPagingViewDidChanged)(NSInteger currentPage);
  *  Contains all views displayed
  */
 @property (nonatomic, strong) NSMutableArray *viewControllers;
+@property (nonatomic, strong) NSMutableArray *navItemsViews;
 
 /*
  *  Contains all views displayed
