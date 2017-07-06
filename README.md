@@ -3,7 +3,7 @@
 [![Version](https://img.shields.io/cocoapods/v/SLPagingView.svg?style=flat)](http://cocoadocs.org/docsets/SLPagingView)
 [![License](https://img.shields.io/cocoapods/l/SLPagingView.svg?style=flat)](http://cocoadocs.org/docsets/SLPagingView)
 
-In this form I added methods for removing and updating views
+In this fork I added methods for removing and updating views
 
 A navigation bar system allowing to do a Tinder like or Twitter like.
 
